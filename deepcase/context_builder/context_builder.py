@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 class ContextBuilder(nn.Module):
 
     def __init__(self, input_size, output_size, hidden_size=128, num_layers=1,
-                 max_length=10, bidirectional=False, LSTM=False):
+                 max_length=10, bidirectional=False, LSTM=False,
+                 decoder_event_hidden_size=128):
         """ContextBuilder that learns to interpret context from security events.
             Based on an attention-based Encoder-Decoder architecture.
 
@@ -54,11 +55,15 @@ class ContextBuilder(nn.Module):
 
             LSTM : boolean, default=False
                 If True, use an LSTM as a recurrent unit instead of GRU
+
+            decoder_event_hidden_size : int, default=128
+                Size of hidden layer in event decoder.
             """
         logger.info("ContextBuilder.__init__")
 
         # Initialise super
         super().__init__()
+        self.decoder_event_hidden_size = decoder_event_hidden_size
 
         self.input_size    = input_size
         self.output_size   = output_size
@@ -98,9 +103,10 @@ class ContextBuilder(nn.Module):
 
         # Create event decoder
         self.decoder_event = DecoderEvent(
-            input_size  = input_size,
-            output_size = output_size,
-            dropout     = 0.1,
+            input_size   = input_size,
+            output_size  = output_size,
+            hidden_size  = decoder_event_hidden_size,
+            dropout      = 0.1,
         )
 
     ########################################################################
@@ -738,6 +744,7 @@ class ContextBuilder(nn.Module):
             max_length    = checkpoint.get('max_length')
             bidirectional = checkpoint.get('bidirectional')
             LSTM          = checkpoint.get('LSTM')
+            decoder_event_hidden_size = checkpoint.get('decoder_event_hidden_size')
         else:
             # Backward compatibility for old raw state_dict checkpoints.
             state_dict = checkpoint
@@ -765,6 +772,12 @@ class ContextBuilder(nn.Module):
 
             recurrent_weight = state_dict.get('encoder.recurrent.weight_hh_l0')
             LSTM = recurrent_weight.shape[0] == 4 * hidden_size
+            decoder_event_hidden_size = state_dict.get(
+                'decoder_event.hidden.weight',
+            ).shape[0]
+
+        if decoder_event_hidden_size is None:
+            decoder_event_hidden_size = state_dict.get('decoder_event.hidden.weight').shape[0]
 
         # Create ContextBuilder
         result = cls(
@@ -775,6 +788,7 @@ class ContextBuilder(nn.Module):
             max_length    = max_length,
             bidirectional = bidirectional,
             LSTM          = LSTM,
+            decoder_event_hidden_size = decoder_event_hidden_size,
         )
 
         # Cast to device if necessary
