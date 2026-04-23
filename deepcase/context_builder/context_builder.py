@@ -246,7 +246,10 @@ class ContextBuilder(nn.Module):
         self.train()
 
         # Set criterion and optimiser
-        criterion = LabelSmoothing(self.decoder_event.out.out_features, delta)
+        output_size = self.decoder_event.out.out_features
+        counts = torch.bincount(y.reshape(-1), minlength=output_size).to(torch.float)
+        distribution = counts / counts.sum()
+        criterion = LabelSmoothing(output_size, delta, distribution)
         optimizer = optimizer(
             params = self.parameters(),
             lr     = learning_rate
