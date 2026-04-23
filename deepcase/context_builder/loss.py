@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class LabelSmoothing(nn.Module):
 
-    def __init__(self, size, smoothing=0.0):
+    def __init__(self, size, smoothing=0.0, distribution=None):
         """Implements label smoothing loss function
 
             Parameters
@@ -14,6 +14,10 @@ class LabelSmoothing(nn.Module):
 
             smoothing : float, default=0.0
                 Smoothing factor to apply
+
+            distribution : torch.Tensor, optional
+                Event-frequency distribution for scattering smoothing mass.
+                If omitted, smoothing mass is distributed uniformly.
             """
         # Initialise super
         super(LabelSmoothing, self).__init__()
@@ -25,6 +29,12 @@ class LabelSmoothing(nn.Module):
         # Set confidence and smoothing
         self.smoothing  =       smoothing
         self.confidence = 1.0 - smoothing
+        if distribution is not None:
+            distribution = torch.as_tensor(distribution, dtype=torch.float)
+            distribution = distribution / distribution.sum()
+            self.register_buffer('distribution', distribution)
+        else:
+            self.distribution = None
 
     def forward(self, x, target, weights=None, attention=None):
         """Forward data"""
@@ -36,7 +46,13 @@ class LabelSmoothing(nn.Module):
 
         # Create true distribution
         true_dist = x.data.clone()
-        true_dist.fill_(self.smoothing / (self.size - 1))
+        if self.distribution is None:
+            true_dist.fill_(self.smoothing / (self.size - 1))
+        else:
+            true_dist[:] = self.distribution.to(x.device) * self.smoothing
+            target_dist = self.distribution.to(x.device).gather(0, target.squeeze(1))
+            true_dist /= (1 - target_dist).unsqueeze(1)
+            true_dist.scatter_(1, target, 0)
         true_dist.scatter_(1, target, self.confidence)
         # Apply criterion
         result = self.criterion(x, Variable(true_dist, requires_grad=False))
