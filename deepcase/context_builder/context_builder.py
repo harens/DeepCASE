@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 class ContextBuilder(nn.Module):
 
     def __init__(self, input_size, output_size, hidden_size=128, num_layers=1,
-                 max_length=10, bidirectional=False, LSTM=False):
+                 max_length=10, bidirectional=False, LSTM=False,
+                 padding_idx=None):
         """ContextBuilder that learns to interpret context from security events.
             Based on an attention-based Encoder-Decoder architecture.
 
@@ -54,11 +55,15 @@ class ContextBuilder(nn.Module):
 
             LSTM : boolean, default=False
                 If True, use an LSTM as a recurrent unit instead of GRU
+
+            padding_idx : int, optional
+                Event index to treat as padding and mask from attention.
             """
         logger.info("ContextBuilder.__init__")
 
         # Initialise super
         super().__init__()
+        self.padding_idx = padding_idx
 
         ################################################################
         #                      Initialise layers                       #
@@ -169,6 +174,7 @@ class ContextBuilder(nn.Module):
                 context_vector = context_vector,
                 previous_input = decoder_input,
             )
+            attention_ = self._mask_attention(X, attention_)
 
             # Compute event probability distribution
             confidence_ = self.decoder_event(
@@ -189,6 +195,15 @@ class ContextBuilder(nn.Module):
 
         # Return result
         return torch.stack(confidence, dim=1), torch.stack(attention, dim=1)
+
+
+    def _mask_attention(self, X, attention):
+        """Remove padding positions from attention when configured."""
+        if self.padding_idx is None:
+            return attention
+
+        attention = attention.masked_fill(X == self.padding_idx, 0)
+        return attention / attention.sum(dim=1, keepdim=True).clamp(min=1e-12)
 
 
     ########################################################################
@@ -508,6 +523,7 @@ class ContextBuilder(nn.Module):
 
         # Loop over batches
         for batch, (X_, y_) in enumerate(batches):
+            X_events = X_
             # Compute initial attention and confidence
             confidence, attention = self.predict(X_, y_)
             confidence = confidence.squeeze(1)
@@ -537,6 +553,7 @@ class ContextBuilder(nn.Module):
                 # Add decoding function
                 def decode(input, attn, softmax=False):
                     if softmax: attn = F.softmax(attn, dim=1)
+                    attn = self._mask_attention(X_events, attn)
                     return self.decoder_event(input, attn)
 
                 # Perform prediction
@@ -554,6 +571,7 @@ class ContextBuilder(nn.Module):
 
             # Perform final softmax
             if iterations > 0: attn = F.softmax(attn, dim=1)
+            attn = self._mask_attention(X_events, attn)
 
             # Detach attention - memory optimization
             attn = attn.detach()

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class Interpreter(object):
 
     def __init__(self, context_builder, features, eps=0.1, min_samples=5,
-                 threshold=0.2):
+                 threshold=0.2, padding_idx=None):
         """Interpreter for a given ContextBuilder.
 
             Parameters
@@ -37,9 +37,14 @@ class Interpreter(object):
             threshold : float, default=0.2
                 Minimum required confidence of ContextBuilder before using a
                 context in training clusters.
+
+            padding_idx : int, optional
+                Event index to omit from context vectors as padding.
             """
         # Initialise ContextBuilder
         self.context_builder = context_builder
+        if padding_idx is None and context_builder is not None:
+            padding_idx = getattr(context_builder, 'padding_idx', None)
 
         # Create cluster algorithm dbscan
         self.dbscan = Cluster(p=1)
@@ -49,6 +54,7 @@ class Interpreter(object):
         self.eps         = eps
         self.min_samples = min_samples
         self.threshold   = threshold
+        self.padding_idx = padding_idx
 
         # Store entries
         self.clusters = np.zeros(0)
@@ -633,9 +639,17 @@ class Interpreter(object):
 
         # Create vectors
         for i, events in enumerate(torch.unbind(X, dim=1)):
+            values = attention[:, i].detach().cpu().numpy()
+            rows   = range
+            cols   = events.cpu().numpy()
+            if self.padding_idx is not None:
+                mask   = cols != self.padding_idx
+                values = values[mask]
+                rows   = rows[mask]
+                cols   = cols[mask]
+
             result += sp.csc_matrix(
-                (attention[:, i].detach().cpu().numpy(),
-                (range, events.cpu().numpy())),
+                (values, (rows, cols)),
                 shape=(X.shape[0], size)
             )
 
@@ -803,6 +817,7 @@ class Interpreter(object):
             'eps'        : self.eps,
             'min_samples': self.min_samples,
             'threshold'  : self.threshold,
+            'padding_idx': self.padding_idx,
 
             # Stored entries
             'clusters': self.clusters,
@@ -849,6 +864,7 @@ class Interpreter(object):
             'eps'            : 0.1,
             'min_samples'    : 5,
             'threshold'      : 0.2,
+            'padding_idx'    : None,
 
             # Stored entries
             'clusters': np.zeros(0),
@@ -880,6 +896,7 @@ class Interpreter(object):
             eps            = dictionary.get('eps'),
             min_samples    = dictionary.get('min_samples'),
             threshold      = dictionary.get('threshold'),
+            padding_idx    = dictionary.get('padding_idx'),
         )
 
         result.clusters = dictionary.get('clusters')
