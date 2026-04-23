@@ -256,12 +256,14 @@ Accepted deviation from paper defaults.
 
 Although the paper treats `delta` as a tunable parameter, and the CLI in the original implementation provided a `--delta` option, it is instead hardcoded to a fixed value (`0.1`)
 
-This limited reproducibility and gave a false impression of controlled experimentation with different smoothing strengths.
+This limits reproducibility and gives a false impression of controlled experimentation with different smoothing strengths.
 
 **Resolution:**
-This was addressed in [`fix/label-smoothing-delta-config`](https://github.com/harens/DeepCASE/tree/fix/label-smoothing-delta-config) and merged into the maintained baseline, which in turn made `delta` configurable and propagated it consistently.
+This was addressed in [`fix/label-smoothing-delta-config`](https://github.com/harens/DeepCASE/tree/fix/label-smoothing-delta-config) and merged into the maintained baseline, making `delta` configurable and propagating it consistently.
 
-The default value remains unchanged, as recommended in the paper, so this modification does not alter baseline behaviour.
+The default value remains unchanged, as recommended in the paper, so baseline behaviour is preserved.
+
+Upstream PR: [#12](https://github.com/Thijsvanede/DeepCASE/pull/12)
 
 #### `Interpreter.fit_predict()`
 
@@ -269,6 +271,8 @@ The method forwards user-provided parameters (`iterations`, `batch_size`, `verbo
 
 **Resolution:**  
 This bug was fixed in branch [`fix/interpreter-api-and-logging`](https://github.com/harens/DeepCASE/tree/fix/interpreter-api-and-logging) and merged into the maintained baseline, so that the user-supplied values are preserved into the prediction step. This change may alter runtime characteristics for callers that implicitly relied on the previous hardcoded defaults, but restores consistency with the documented interface.
+
+Upstream PR: [#14](https://github.com/Thijsvanede/DeepCASE/pull/14)
 
 ---
 
@@ -278,6 +282,8 @@ Loss values were inconsistently normalised when reported during training, due to
 
 **Resolution:**  
 Corrected in [`fix/interpreter-api-and-logging`](https://github.com/harens/DeepCASE/tree/fix/interpreter-api-and-logging) and merged into the maintained baseline, while leaving the underlying optimisation behaviour unchanged.
+
+Upstream PR: [#14](https://github.com/Thijsvanede/DeepCASE/pull/14)
 
 ---
 
@@ -289,6 +295,8 @@ During loading, key architectural parameters, such as num_layers and whether an 
 This issue was addressed in [`fix/contextbuilder-load-metadata`](https://github.com/harens/DeepCASE/tree/fix/contextbuilder-load-metadata) and merged into the maintained baseline, with a fallback path for legacy checkpoints.
 
 Because this change affects model persistence, it introduces a potential compatibility boundary and should be validated with explicit round-trip tests (save → load → equivalence) before being relied upon in production or comparative experiments.
+
+Upstream PR: [#13](https://github.com/Thijsvanede/DeepCASE/pull/13)
 
 ---
 
