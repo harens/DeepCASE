@@ -28,7 +28,8 @@ class Preprocessor(object):
         self.timeout        = timeout
 
         # Set no-event event
-        self.NO_EVENT = NO_EVENT
+        self.NO_EVENT       = NO_EVENT
+        self.NO_EVENT_INDEX = None
 
         # Set required columns
         self.REQUIRED_COLUMNS = {'timestamp', 'event', 'machine'}
@@ -117,6 +118,7 @@ class Preprocessor(object):
 
         mapping[len(mapping)] = self.NO_EVENT
         mapping_inverse = {v: k for k, v in mapping.items()}
+        self.NO_EVENT_INDEX = mapping_inverse[self.NO_EVENT]
 
         # Apply mapping
         data['event'] = data['event'].map(mapping_inverse)

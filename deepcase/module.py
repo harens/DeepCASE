@@ -22,6 +22,7 @@ class DeepCASE(object):
             eps         = 0.1,
             min_samples = 5,
             threshold   = 0.2,
+            padding_idx = None,
         ):
         """Analyse security events with respect to contextual machine behaviour.
 
@@ -55,6 +56,9 @@ class DeepCASE(object):
             threshold : float, default=0.2
                 Minimum required confidence in fingerprint before using it in
                 training clusters.
+
+            padding_idx : int, optional
+                Event index to treat as padding in attention and vectors.
             """
 
         # Initialise Context Builder from parameters
@@ -63,6 +67,7 @@ class DeepCASE(object):
             output_size   = features,
             max_length    = max_length,
             hidden_size   = hidden_size,
+            padding_idx   = padding_idx,
         )
 
         # Initialise Interpreter from parameters
@@ -72,6 +77,7 @@ class DeepCASE(object):
             eps             = eps,
             min_samples     = min_samples,
             threshold       = threshold,
+            padding_idx     = padding_idx,
         )
 
     ########################################################################
