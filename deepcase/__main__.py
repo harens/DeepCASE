@@ -200,6 +200,7 @@ if __name__ == "__main__":
             batch_size    = args.batch,
             learning_rate = 0.01,
             teach_ratio   = 0.5,
+            delta         = args.delta,
             verbose       = not args.silent,
         )
 

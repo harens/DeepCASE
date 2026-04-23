@@ -106,6 +106,7 @@ Once the ``context_builder`` is created, we train it using the :py:meth:`fit()` 
         epochs        = 10,                          # Number of epochs to train with
         batch_size    = 128,                         # Number of samples in each training batch, in paper this was 128
         learning_rate = 0.01,                        # Learning rate to train with, in paper this was 0.01
+        delta         = 0.1,                         # Label smoothing factor
         verbose       = True,                        # If True, prints progress
     )
 

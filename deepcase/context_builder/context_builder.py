@@ -196,7 +196,7 @@ class ContextBuilder(nn.Module):
     ########################################################################
 
     def fit(self, X, y, epochs=10, batch_size=128, learning_rate=0.01,
-            optimizer=optim.SGD, teach_ratio=0.5, verbose=True):
+            optimizer=optim.SGD, teach_ratio=0.5, delta=0.1, verbose=True):
         """Fit the sequence predictor with labelled data
 
             Parameters
@@ -222,6 +222,9 @@ class ContextBuilder(nn.Module):
             teach_ratio : float, default=0.5
                 Ratio of sequences to train including labels.
 
+            delta : float, default=0.1
+                Label smoothing factor to apply during training.
+
             verbose : boolean, default=True
                 If True, prints progress.
 
@@ -243,7 +246,7 @@ class ContextBuilder(nn.Module):
         self.train()
 
         # Set criterion and optimiser
-        criterion = LabelSmoothing(self.decoder_event.out.out_features, 0.1)
+        criterion = LabelSmoothing(self.decoder_event.out.out_features, delta)
         optimizer = optimizer(
             params = self.parameters(),
             lr     = learning_rate
@@ -356,7 +359,8 @@ class ContextBuilder(nn.Module):
 
 
     def fit_predict(self, X, y, epochs=10, batch_size=128, learning_rate=0.01,
-                    optimizer=optim.SGD, teach_ratio=0.5, verbose=True):
+                    optimizer=optim.SGD, teach_ratio=0.5, delta=0.1,
+                    verbose=True):
         """Fit the sequence predictor with labelled data
 
             Parameters
@@ -382,6 +386,9 @@ class ContextBuilder(nn.Module):
             teach_ratio : float, default=0.5
                 Ratio of sequences to train including labels
 
+            delta : float, default=0.1
+                Label smoothing factor to apply during training
+
             verbose : boolean, default=True
                 If True, prints progress
 
@@ -401,6 +408,7 @@ class ContextBuilder(nn.Module):
             learning_rate = learning_rate,
             optimizer     = optimizer,
             teach_ratio   = teach_ratio,
+            delta         = delta,
             verbose       = verbose,
         ).predict(X)
 

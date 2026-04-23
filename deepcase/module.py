@@ -90,6 +90,7 @@ class DeepCASE(object):
             learning_rate = 0.01,
             optimizer     = optim.SGD,
             teach_ratio   = 0.5,
+            delta         = 0.1,
 
             # Interpreter-specific parameters
             iterations       = 100,
@@ -132,6 +133,9 @@ class DeepCASE(object):
             teach_ratio : float, default=0.5
                 Ratio of sequences to train including labels.
 
+            delta : float, default=0.1
+                Label smoothing factor to apply during ContextBuilder training.
+
             iterations : int, default=100
                 Number of iterations for query.
 
@@ -169,6 +173,7 @@ class DeepCASE(object):
             learning_rate = learning_rate,
             optimizer     = optimizer,
             teach_ratio   = teach_ratio,
+            delta         = delta,
             verbose       = verbose,
         )
 
@@ -249,6 +254,7 @@ class DeepCASE(object):
             learning_rate = 0.01,
             optimizer     = optim.SGD,
             teach_ratio   = 0.5,
+            delta         = 0.1,
 
             # Interpreter-specific parameters
             iterations       = 100,
@@ -290,6 +296,9 @@ class DeepCASE(object):
 
             teach_ratio : float, default=0.5
                 Ratio of sequences to train including labels.
+
+            delta : float, default=0.1
+                Label smoothing factor to apply during ContextBuilder training.
 
             iterations : int, default=100
                 Number of iterations for query.
@@ -335,6 +344,7 @@ class DeepCASE(object):
             learning_rate    = learning_rate,
             optimizer        = optimizer,
             teach_ratio      = teach_ratio,
+            delta            = delta,
             iterations       = iterations,
             query_batch_size = query_batch_size,
             strategy         = strategy,
