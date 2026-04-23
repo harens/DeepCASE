@@ -60,6 +60,14 @@ class ContextBuilder(nn.Module):
         # Initialise super
         super().__init__()
 
+        self.input_size    = input_size
+        self.output_size   = output_size
+        self.hidden_size   = hidden_size
+        self.num_layers    = num_layers
+        self.max_length    = max_length
+        self.bidirectional = bidirectional
+        self.LSTM          = LSTM
+
         ################################################################
         #                      Initialise layers                       #
         ################################################################
@@ -618,7 +626,16 @@ class ContextBuilder(nn.Module):
                 File to output model.
             """
         # Save to output file
-        torch.save(self.state_dict(), outfile)
+        torch.save({
+            'state_dict'   : self.state_dict(),
+            'input_size'   : self.input_size,
+            'output_size'  : self.output_size,
+            'hidden_size'  : self.hidden_size,
+            'num_layers'   : self.num_layers,
+            'max_length'   : self.max_length,
+            'bidirectional': self.bidirectional,
+            'LSTM'         : self.LSTM,
+        }, outfile)
 
     @classmethod
     def load(cls, infile, device=None):
@@ -629,17 +646,46 @@ class ContextBuilder(nn.Module):
             infile : string
                 File from which to load model.
             """
-        # Load state dictionary
-        state_dict = torch.load(infile, map_location=device)
+        # Load checkpoint
+        checkpoint = torch.load(infile, map_location=device)
 
-        # Get input variables from state_dict
-        input_size    = state_dict.get('embedding.weight').shape[0]
-        output_size   = state_dict.get('decoder_event.out.weight').shape[0]
-        hidden_size   = state_dict.get('embedding.weight').shape[1]
-        num_layers    = 1 # TODO
-        max_length    = state_dict.get('decoder_attention.attn.weight').shape[0]
-        bidirectional = state_dict.get('decoder_attention.attn.weight').shape[1] // hidden_size != num_layers
-        LSTM          = False # TODO
+        if 'state_dict' in checkpoint:
+            state_dict = checkpoint.get('state_dict')
+
+            input_size    = checkpoint.get('input_size')
+            output_size   = checkpoint.get('output_size')
+            hidden_size   = checkpoint.get('hidden_size')
+            num_layers    = checkpoint.get('num_layers')
+            max_length    = checkpoint.get('max_length')
+            bidirectional = checkpoint.get('bidirectional')
+            LSTM          = checkpoint.get('LSTM')
+        else:
+            # Backward compatibility for old raw state_dict checkpoints.
+            state_dict = checkpoint
+
+            input_size    = state_dict.get('embedding.weight').shape[0]
+            output_size   = state_dict.get('decoder_event.out.weight').shape[0]
+            hidden_size   = state_dict.get('embedding.weight').shape[1]
+            max_length    = state_dict.get('decoder_attention.attn.weight').shape[0]
+
+            layer_indices = list()
+            bidirectional = False
+            prefix = 'encoder.recurrent.weight_ih_l'
+            for key in state_dict:
+                if not key.startswith(prefix): continue
+
+                suffix = key[len(prefix):]
+                if suffix.endswith('_reverse'):
+                    suffix = suffix[:-len('_reverse')]
+                    bidirectional = True
+
+                if suffix.isdigit():
+                    layer_indices.append(int(suffix))
+
+            num_layers = max(layer_indices) + 1 if layer_indices else 1
+
+            recurrent_weight = state_dict.get('encoder.recurrent.weight_hh_l0')
+            LSTM = recurrent_weight.shape[0] == 4 * hidden_size
 
         # Create ContextBuilder
         result = cls(
