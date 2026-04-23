@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 class ContextBuilder(nn.Module):
 
     def __init__(self, input_size, output_size, hidden_size=128, num_layers=1,
-                 max_length=10, bidirectional=False, LSTM=False):
+                 max_length=10, bidirectional=False, LSTM=False,
+                 decoder_event_hidden_size=128):
         """ContextBuilder that learns to interpret context from security events.
             Based on an attention-based Encoder-Decoder architecture.
 
@@ -54,11 +55,15 @@ class ContextBuilder(nn.Module):
 
             LSTM : boolean, default=False
                 If True, use an LSTM as a recurrent unit instead of GRU
+
+            decoder_event_hidden_size : int, default=128
+                Size of hidden layer in event decoder.
             """
         logger.info("ContextBuilder.__init__")
 
         # Initialise super
         super().__init__()
+        self.decoder_event_hidden_size = decoder_event_hidden_size
 
         ################################################################
         #                      Initialise layers                       #
@@ -90,9 +95,10 @@ class ContextBuilder(nn.Module):
 
         # Create event decoder
         self.decoder_event = DecoderEvent(
-            input_size  = input_size,
-            output_size = output_size,
-            dropout     = 0.1,
+            input_size   = input_size,
+            output_size  = output_size,
+            hidden_size  = decoder_event_hidden_size,
+            dropout      = 0.1,
         )
 
     ########################################################################
@@ -628,6 +634,7 @@ class ContextBuilder(nn.Module):
         input_size    = state_dict.get('embedding.weight').shape[0]
         output_size   = state_dict.get('decoder_event.out.weight').shape[0]
         hidden_size   = state_dict.get('embedding.weight').shape[1]
+        decoder_event_hidden_size = state_dict.get('decoder_event.hidden.weight').shape[0]
         num_layers    = 1 # TODO
         max_length    = state_dict.get('decoder_attention.attn.weight').shape[0]
         bidirectional = state_dict.get('decoder_attention.attn.weight').shape[1] // hidden_size != num_layers
@@ -642,6 +649,7 @@ class ContextBuilder(nn.Module):
             max_length    = max_length,
             bidirectional = bidirectional,
             LSTM          = LSTM,
+            decoder_event_hidden_size = decoder_event_hidden_size,
         )
 
         # Cast to device if necessary

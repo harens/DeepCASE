@@ -19,6 +19,7 @@ class DeepCASE(object):
             features,
             max_length  = 10,
             hidden_size = 128,
+            decoder_event_hidden_size = 128,
             eps         = 0.1,
             min_samples = 5,
             threshold   = 0.2,
@@ -46,6 +47,9 @@ class DeepCASE(object):
                 prediction power. However, high values will result in slower
                 training and prediction times.
 
+            decoder_event_hidden_size : int, default=128
+                Size of hidden layer in event decoder.
+
             eps : float, default=0.1
                 Epsilon used for determining maximum distance between clusters.
 
@@ -63,6 +67,7 @@ class DeepCASE(object):
             output_size   = features,
             max_length    = max_length,
             hidden_size   = hidden_size,
+            decoder_event_hidden_size = decoder_event_hidden_size,
         )
 
         # Initialise Interpreter from parameters

@@ -98,14 +98,17 @@ class DecoderAttention(nn.Module):
 
 class DecoderEvent(nn.Module):
 
-    def __init__(self, input_size, output_size, dropout=0.1):
+    def __init__(self, input_size, output_size, hidden_size=None, dropout=0.1):
         """"""
         # Call super
         super().__init__()
 
+        if hidden_size is None:
+            hidden_size = input_size
+
         # Initialise layers
-        self.hidden  = nn.Linear(input_size, input_size)
-        self.out     = nn.Linear(input_size, output_size)
+        self.hidden  = nn.Linear(input_size, hidden_size)
+        self.out     = nn.Linear(hidden_size, output_size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, X, attention):
