@@ -333,9 +333,9 @@ class Interpreter(object):
         ).predict(
             X          = X,
             y          = y,
-            iterations = 100,
-            batch_size = 1024,
-            verbose    = False,
+            iterations = iterations,
+            batch_size = batch_size,
+            verbose    = verbose,
         )
 
     ########################################################################
