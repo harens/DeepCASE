@@ -290,8 +290,8 @@ class ContextBuilder(nn.Module):
                     optimizer.step()
 
                     # Update description
-                    total_loss  += loss.item() / X_.shape[1]
-                    total_items += X_.shape[0]
+                    total_loss  += loss.item()
+                    total_items += X_.shape[0] * y_.shape[1]
 
                     if verbose:
                         data.set_description(
