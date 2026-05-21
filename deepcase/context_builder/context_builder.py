@@ -245,10 +245,11 @@ class ContextBuilder(nn.Module):
 
         # Get current mode
         mode = self.training
-        # Get input as torch tensors
+        # Keep the dataset on the host and move only batches to the model
+        # device so large runs do not materialize one giant CUDA tensor.
         device = next(self.parameters()).device
-        X = torch.as_tensor(X, dtype=torch.int64, device=device)
-        y = torch.as_tensor(y, dtype=torch.int64, device=device)
+        X = torch.as_tensor(X, dtype=torch.int64)
+        y = torch.as_tensor(y, dtype=torch.int64)
 
         # Set to training mode
         self.train()
@@ -269,46 +270,72 @@ class ContextBuilder(nn.Module):
         # Loop over each epoch
         for epoch in range(1, epochs+1):
             try:
-                # Set progress bar if necessary
-                if verbose:
-                    data = tqdm(data,
-                        desc="[Epoch {:{width}}/{:{width}} loss={:.4f}]"
-                        .format(epoch, epochs, 0, width=len(str(epochs)))
-                    )
-
                 # Set average loss
                 total_loss  = 0
                 total_items = 0
 
                 # Loop over entire dataset
-                for X_, y_ in data:
-                    # Clear gradients
-                    optimizer.zero_grad()
-
-                    # Get prediction
-                    confidence, _ = self.forward(X_, y_,
-                        steps       = y_.shape[1],
-                        teach_ratio = teach_ratio
+                if verbose:
+                    data_iter = tqdm(
+                        data,
+                        desc="[Epoch {:{width}}/{:{width}} loss={:.4f}]"
+                        .format(epoch, epochs, 0, width=len(str(epochs))),
                     )
+                    for X_, y_ in data_iter:
+                        X_ = X_.to(device)
+                        y_ = y_.to(device)
 
-                    # Compute loss
-                    loss = 0
-                    for step in range(confidence.shape[1]):
-                        loss += criterion(confidence[:, step], y_[:, step])
+                        # Clear gradients
+                        optimizer.zero_grad()
 
-                    # Backpropagate
-                    loss.backward()
-                    optimizer.step()
+                        # Get prediction
+                        confidence, _ = self.forward(X_, y_,
+                            steps       = y_.shape[1],
+                            teach_ratio = teach_ratio
+                        )
 
-                    # Update description
-                    total_loss  += loss.item()
-                    total_items += X_.shape[0] * y_.shape[1]
+                        # Compute loss
+                        loss = criterion(confidence[:, 0], y_[:, 0])
+                        for step in range(1, confidence.shape[1]):
+                            loss = loss + criterion(confidence[:, step], y_[:, step])
 
-                    if verbose:
-                        data.set_description(
+                        # Backpropagate
+                        loss.backward()
+                        optimizer.step()
+
+                        # Update description
+                        total_loss  += loss.item()
+                        total_items += X_.shape[0] * y_.shape[1]
+                        data_iter.set_description(
                             "[Epoch {:{width}}/{:{width}} loss={:.4f}]"
                             .format(epoch, epochs, total_loss/total_items,
                             width=len(str(epochs))))
+                else:
+                    for X_, y_ in data:
+                        X_ = X_.to(device)
+                        y_ = y_.to(device)
+
+                        # Clear gradients
+                        optimizer.zero_grad()
+
+                        # Get prediction
+                        confidence, _ = self.forward(X_, y_,
+                            steps       = y_.shape[1],
+                            teach_ratio = teach_ratio
+                        )
+
+                        # Compute loss
+                        loss = criterion(confidence[:, 0], y_[:, 0])
+                        for step in range(1, confidence.shape[1]):
+                            loss = loss + criterion(confidence[:, step], y_[:, step])
+
+                        # Backpropagate
+                        loss.backward()
+                        optimizer.step()
+
+                        # Update description
+                        total_loss  += loss.item()
+                        total_items += X_.shape[0] * y_.shape[1]
 
             except KeyboardInterrupt as e:
                 print("\nTraining interrupted, performing clean stop")
@@ -321,7 +348,7 @@ class ContextBuilder(nn.Module):
         return self
 
 
-    def predict(self, X, y=None, steps=1):
+    def predict(self, X, y=None, steps=1, batch_size=1024):
         """Predict the next elements in sequence.
 
             Parameters
@@ -333,6 +360,9 @@ class ContextBuilder(nn.Module):
 
             steps : int, default=1
                 Number of steps to predict into the future
+
+            batch_size : int, default=1024
+                Batch size used to chunk prediction and bound memory usage.
 
             Returns
             -------
@@ -349,21 +379,45 @@ class ContextBuilder(nn.Module):
         # Set to prediction mode
         self.eval()
 
-        # Memory optimization, only use unique values
-        X, inverse = torch.unique(X, dim=0, return_inverse=True)
+        # Preserve the caller-visible output device while only moving each
+        # batch to the model device.
+        original_device = X.device if torch.is_tensor(X) else next(self.parameters()).device
+        device = next(self.parameters()).device
+        if not torch.is_tensor(X):
+            X = torch.as_tensor(X, dtype=torch.int64)
+        else:
+            X = X.to(dtype=torch.int64)
 
-        logger.info("predict {}/{} unique samples".format(X.shape[0], inverse.shape[0]))
+        batches = DataLoader(
+            TensorDataset(X),
+            batch_size = batch_size,
+            shuffle    = False,
+        )
 
         # Do not perform gradient descent
         with torch.no_grad():
-            # Perform all in single batch
-            confidence, attention = self.forward(X, steps=steps)
+            confidences = list()
+            attentions  = list()
+
+            for (X_,) in batches:
+                X_ = X_.to(device)
+
+                # Deduplicate only within the current batch to keep the
+                # optimization bounded without changing semantics.
+                X_, inverse = torch.unique(X_, dim=0, return_inverse=True)
+
+                confidence, attention = self.forward(X_, steps=steps)
+                confidences.append(confidence[inverse])
+                attentions .append(attention [inverse])
+
+            confidence = torch.cat(confidences, dim=0).to(original_device)
+            attention   = torch.cat(attentions,  dim=0).to(original_device)
 
         # Reset to original mode
         self.train(mode)
 
         # Return result
-        return confidence[inverse], attention[inverse]
+        return confidence, attention
 
 
     def fit_predict(self, X, y, epochs=10, batch_size=128, learning_rate=0.01,
@@ -418,7 +472,7 @@ class ContextBuilder(nn.Module):
             teach_ratio   = teach_ratio,
             delta         = delta,
             verbose       = verbose,
-        ).predict(X)
+        ).predict(X, batch_size=batch_size)
 
     ########################################################################
     #                         ContextBuilder Query                         #
@@ -473,6 +527,11 @@ class ContextBuilder(nn.Module):
                 Only returned if return_optimization != None
                 Boolean array of items >= threshold after optimization
             """
+        # Run the attention optimization in eval mode so dropout does not
+        # introduce batch-size-dependent drift across chunked queries.
+        mode = self.training
+        self.eval()
+
         # Get device
         original_device = X.device
 
@@ -517,14 +576,21 @@ class ContextBuilder(nn.Module):
         # Loop over batches
         for batch, (X_, y_) in enumerate(batches):
             # Compute initial attention and confidence
-            confidence, attention = self.predict(X_, y_)
+            confidence, attention = self.predict(
+                X          = X_,
+                y          = y_,
+                batch_size = batch_size,
+            )
             confidence = confidence.squeeze(1)
             attention  = attention .squeeze(1)
 
             # Count confidence >= 0.2 of non-optimized datapoints
             if return_optimization is not None:
                 confidence_orig.append((
-                    confidence[torch.arange(y_.shape[0]), y_].exp() >= return_optimization
+                    confidence[
+                        torch.arange(y_.shape[0], device=confidence.device),
+                        y_,
+                    ].exp() >= return_optimization
                 ).detach().clone())
 
             # Make attention variable
@@ -568,8 +634,9 @@ class ContextBuilder(nn.Module):
 
             # Get confidence levels
             confidence_ = self.decoder_event(X_, attn)
-            confidence_ = confidence_[torch.arange(y_.shape[0]), y_].exp().detach()
-            confidence  = confidence [torch.arange(y_.shape[0]), y_].exp().detach()
+            row_index = torch.arange(y_.shape[0], device=confidence_.device)
+            confidence_ = confidence_[row_index, y_].exp().detach()
+            confidence  = confidence [row_index, y_].exp().detach()
 
             # Check where confidence improved
             mask = confidence_ > confidence
@@ -587,7 +654,10 @@ class ContextBuilder(nn.Module):
                 # Count confidence >= 0.2 of optimized datapoints
                 if return_optimization is not None:
                     confidence_optim.append((
-                        confidence[torch.arange(y_.shape[0]), y_] >= return_optimization
+                        confidence[
+                            torch.arange(y_.shape[0], device=confidence.device),
+                            y_,
+                        ] >= return_optimization
                     ).detach().clone())
 
             # Add confidence and attention to result
@@ -601,6 +671,9 @@ class ContextBuilder(nn.Module):
 
         # Close progress if necessary
         if verbose: progress.close()
+
+        # Restore the original module mode before returning.
+        self.train(mode)
 
         # Return confidence optimization if necessary
         if return_optimization is not None:

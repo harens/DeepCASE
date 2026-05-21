@@ -6,10 +6,11 @@ import torch
 import warnings
 from collections       import Counter
 from sklearn.neighbors import KDTree
+from torch.utils.data import DataLoader, TensorDataset
 from tqdm              import tqdm
 
 from .cluster import Cluster
-from .utils   import group_by, unique_2d, sp_unique
+from .utils   import group_by, sp_unique
 
 # Set logger
 logger = logging.getLogger(__name__)
@@ -175,91 +176,74 @@ class Interpreter(object):
                 * -2: Label not in training
                 * -3: Closest cluster > epsilon
             """
-        # Get unique samples
-        X, y, inverse_result = unique_2d(X, y)
+        if not torch.is_tensor(X):
+            X = torch.as_tensor(X, dtype=torch.int64)
+        else:
+            X = X.to(dtype=torch.int64)
 
-        ####################################################################
-        #                         Compute vectors                          #
-        ####################################################################
+        if not torch.is_tensor(y):
+            y = torch.as_tensor(y, dtype=torch.int64)
+        else:
+            y = y.to(dtype=torch.int64)
 
-        # Compute vectors
-        vectors, mask = self.attended_context(
-            X           = X,
-            y           = y,
-            threshold   = self.threshold,
-            iterations  = iterations,
-            batch_size  = batch_size,
-            verbose     = verbose,
+        if y.ndim == 1:
+            y = y.unsqueeze(1)
+
+        batches = DataLoader(
+            TensorDataset(X, y),
+            batch_size = batch_size,
+            shuffle    = False,
         )
 
-        # Initialise result
-        result = np.full(vectors.shape[0], -4, dtype=float)
+        results = list()
 
-        ####################################################################
-        #                   Find closest known sequences                   #
-        ####################################################################
-
-        # Group sequences by individual events
-        events = group_by(y[mask].squeeze(1).cpu().numpy())
-        # Add verbosity, if necessary
-        if verbose: events = tqdm(events, desc="Predicting      ")
-
-        # Loop over all events
-        for event, indices in events:
-
-            ############################################################
-            #                   Case - unknown event                   #
-            ############################################################
-
-            # If event is not in training set, set to -2
-            if event not in self.tree:
-                result[indices] = -2
-                continue
-
-            ############################################################
-            #                    Case - known event                    #
-            ############################################################
-
-            # Get vectors for given event
-            vectors_ = vectors[indices]
-
-            # Get unique vectors - optimizes computation time
-            vectors_, inverse, _ = sp_unique(vectors_)
-
-            # Get closest cluster
-            distance, neighbours = self.tree[event].query(
-                X               = vectors_.toarray(),
-                return_distance = True,
-                dualtree        = vectors_.shape[0] >= 1e3, # Optimization
+        for X_, y_ in batches:
+            vectors, mask = self.attended_context(
+                X           = X_,
+                y           = y_,
+                threshold   = self.threshold,
+                iterations  = iterations,
+                batch_size  = batch_size,
+                verbose     = verbose,
             )
-            # Get neighbour indices
-            neighbours = self.tree[event].get_arrays()[1][neighbours][:, 0]
-            # Compute neighbour scores
-            scores = np.asarray([
-                self.labels[event][neighbour] for neighbour in neighbours
-            ])
 
-            ############################################################
-            #               Set result, based on epsilon               #
-            ############################################################
+            # Initialise result for confident samples in this chunk.
+            result = np.full(vectors.shape[0], -4, dtype=float)
 
-            # Set resulting indices
-            result[indices] = np.where(
-                distance[:, 0] <= self.eps, # Check if closest cluster > eps
-                scores,                     # If so, assign actual score
-                -3,                         # Else, closest cluster > eps, -3
-            )[inverse]
+            # Group sequences by individual events.
+            events = group_by(y_[mask].squeeze(1).detach().cpu().numpy())
+            if verbose:
+                events = tqdm(events, desc="Predicting      ")
 
-        ####################################################################
-        #                     Add non-confident events                     #
-        ####################################################################
+            for event, indices in events:
+                if event not in self.tree:
+                    result[indices] = -2
+                    continue
 
-        result_ = np.full(X.shape[0], -1, dtype=float)
-        result_[mask.cpu().numpy()] = result
-        result = result_
+                vectors_ = vectors[indices]
+                vectors_, inverse, _ = sp_unique(vectors_)
 
-        # Return result
-        return result[inverse_result.cpu().numpy()]
+                distance, neighbours = self.tree[event].query(
+                    X               = vectors_.toarray(),
+                    return_distance = True,
+                    dualtree        = vectors_.shape[0] >= 1e3,
+                )
+                neighbours = self.tree[event].get_arrays()[1][neighbours][:, 0]
+                scores = np.asarray([
+                    self.labels[event][neighbour] for neighbour in neighbours
+                ])
+
+                result[indices] = np.where(
+                    distance[:, 0] <= self.eps,
+                    scores,
+                    -3,
+                )[inverse]
+
+            batch_result = np.full(X_.shape[0], -1, dtype=float)
+            batch_result[mask.detach().cpu().numpy()] = result
+            results.append(batch_result)
+
+        return np.concatenate(results, axis=0) if results else np.zeros(0, dtype=float)
 
 
     def fit_predict(self,
@@ -627,20 +611,20 @@ class Interpreter(object):
             result : scipy.sparse.csc_matrix of shape=(n_samples, n)
                 Sparse vector representing each context.
             """
-        # Initialise result
-        result = sp.csc_matrix((X.shape[0], size))
-        range  = np.arange(X.shape[0], dtype=int)
+        if torch.is_tensor(X):
+            X = X.detach().cpu().numpy()
+        else:
+            X = np.asarray(X)
 
-        # Create vectors
-        for i, events in enumerate(torch.unbind(X, dim=1)):
-            result += sp.csc_matrix(
-                (attention[:, i].detach().cpu().numpy(),
-                (range, events.cpu().numpy())),
-                shape=(X.shape[0], size)
-            )
+        if torch.is_tensor(attention):
+            attention = attention.detach().cpu().numpy()
+        else:
+            attention = np.asarray(attention)
 
-        # Return result
-        return result
+        rows = np.repeat(np.arange(X.shape[0], dtype=int), X.shape[1])
+        cols = X.reshape(-1)
+        data = attention.reshape(-1)
+        return sp.csc_matrix((data, (rows, cols)), shape=(X.shape[0], size))
 
 
     def attended_context(self, X, y,
@@ -683,49 +667,61 @@ class Interpreter(object):
                 confidence >= threshold, False otherwise.
             """
 
-        ####################################################################
-        #                        Optimize attention                        #
-        ####################################################################
+        if not torch.is_tensor(X):
+            X = torch.as_tensor(X, dtype=torch.int64)
+        else:
+            X = X.to(dtype=torch.int64)
+
+        if not torch.is_tensor(y):
+            y = torch.as_tensor(y, dtype=torch.int64)
+        else:
+            y = y.to(dtype=torch.int64)
+
+        if y.ndim == 1:
+            y = y.unsqueeze(1)
+
+        batches = DataLoader(
+            TensorDataset(X, y),
+            batch_size = batch_size,
+            shuffle    = False,
+        )
 
         logger.info("attended_context: Optimize attention")
 
-        # Get optimal confidence
-        confidence, attention = self.attention_query(
-            X          = X,
-            y          = y,
-            iterations = iterations,
-            batch_size = batch_size,
-            verbose    = verbose,
-        )
+        vectors = list()
+        masks   = list()
 
-        # Check where confidence is above threshold
-        mask = confidence >= threshold
+        for X_, y_ in batches:
+            confidence, attention, _ = self.attention_query(
+                X          = X_,
+                y          = y_,
+                iterations = iterations,
+                batch_size = batch_size,
+                verbose    = verbose,
+            )
+
+            mask = confidence >= threshold
+            masks.append(mask)
+
+            if mask.any():
+                vectors.append(self.vectorize(
+                    X         = X_[mask],
+                    attention = attention[mask],
+                    size      = self.features,
+                ))
 
         logger.info("attended_context: Optimize attention finished")
-
-        ####################################################################
-        #         Create vectors (total attention for each event)          #
-        ####################################################################
-
         logger.info("attended_context: Create vectors")
 
-        # Perform vectorization
-        vectors = self.vectorize(
-            X         = X[mask],
-            attention = attention[mask],
-            size      = self.features,
-        )
+        if vectors:
+            vectors = sp.vstack(vectors, format="csc")
+            vectors.data = np.round(vectors.data, 4)
+        else:
+            vectors = sp.csc_matrix((0, self.features))
 
-        # Round attention to 4 decimal places (for quicker analysis)
-        vectors = np.round(vectors, decimals=4)
+        mask = torch.cat(masks) if masks else torch.zeros(0, dtype=torch.bool, device=X.device)
 
         logger.info("attended_context: Create vectors finished")
-
-        ####################################################################
-        #                          Return result                           #
-        ####################################################################
-
-        # Return result
         return vectors, mask
 
 
@@ -762,23 +758,48 @@ class Interpreter(object):
             attention : torch.Tensor of shape=(n_samples,)
                 Optimal attention for predicting event y.
             """
-        # Get unique values
-        X, y, inverse = unique_2d(X, y)
+        if not torch.is_tensor(X):
+            X = torch.as_tensor(X, dtype=torch.int64)
+        else:
+            X = X.to(dtype=torch.int64)
 
-        # Perform query
-        confidence, attention, _ = self.context_builder.query(
-            X          = X,
-            y          = y,
-            iterations = iterations,
+        if not torch.is_tensor(y):
+            y = torch.as_tensor(y, dtype=torch.int64)
+        else:
+            y = y.to(dtype=torch.int64)
+
+        if y.ndim == 1:
+            y = y.unsqueeze(1)
+
+        batches = DataLoader(
+            TensorDataset(X, y),
             batch_size = batch_size,
-            verbose    = verbose,
+            shuffle    = False,
         )
 
-        # Compute confidence of y
-        confidence = confidence[torch.arange(y.shape[0]), y.squeeze(1)]
+        confidence_parts = list()
+        attention_parts  = list()
 
-        # Return confidence and attention
-        return confidence[inverse], attention[inverse]
+        for X_, y_ in batches:
+            confidence, attention, _ = self.context_builder.query(
+                X          = X_,
+                y          = y_,
+                iterations = iterations,
+                batch_size = batch_size,
+                verbose    = verbose,
+            )
+            confidence_parts.append(
+                confidence[
+                    torch.arange(y_.shape[0], device=confidence.device),
+                    y_.squeeze(1),
+                ].detach()
+            )
+            attention_parts.append(attention.detach())
+
+        confidence = torch.cat(confidence_parts).to(X.device)
+        attention   = torch.cat(attention_parts).to(X.device)
+        inverse     = torch.arange(X.shape[0], device=X.device)
+        return confidence, attention, inverse
 
 
     ########################################################################
