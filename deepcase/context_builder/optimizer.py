@@ -19,7 +19,7 @@ class VarAdam(optim.Adam):
         self._step     = 0
         self._rate     = 0
 
-    def step(self):
+    def step(self, closure=None):
         """Update parameters and rate"""
         # Increment step
         self._step += 1
@@ -29,7 +29,7 @@ class VarAdam(optim.Adam):
         for parameter in self.param_groups:
             parameter['lr'] = self._rate
         # Set optimizer step
-        super().step()
+        return super().step(closure=closure)
 
     def rate(self, step=None):
         """Compute current learning rate

@@ -124,23 +124,22 @@ def show_sequences(context, events, labels=None, mapping=None, NO_EVENT=None, ma
     if n_samples > maximum:
         context_a = context[: math.ceil (maximum / 2) ]
         context_b = context[ -math.floor(maximum / 2):]
-        context   = torch.cat((context_a, context_b), axis=0)
+        context   = torch.cat((context_a, context_b), dim=0)
 
         events_a = events[: math.ceil (maximum / 2) ]
         events_b = events[ -math.floor(maximum / 2):]
-        events   = torch.cat((events_a, events_b), axis=0)
+        events   = torch.cat((events_a, events_b), dim=0)
 
         if labels is not None:
             labels_a = labels[: math.ceil (maximum / 2) ]
             labels_b = labels[ -math.floor(maximum / 2):]
-            labels   = torch.cat((labels_a, labels_b), axis=0)
+            labels   = torch.cat((labels_a, labels_b), dim=0)
 
         # Set shortened to True
         shortened = True
 
 
     # Vectorize functions
-    vmap    = np.vectorize(lambda x: str(mapping.get(x, '?'))) # Mapping
     vlength = np.vectorize(lambda x: len(str(x)))              # String length
 
     # Add labels if None
@@ -152,6 +151,7 @@ def show_sequences(context, events, labels=None, mapping=None, NO_EVENT=None, ma
 
     # Apply mapping if necessary
     if mapping is not None:
+        vmap = np.vectorize(lambda x: str(mapping.get(x, '?'))) # Mapping
         # If NO_EVENT is given add it to mapping
         for key, value in mapping.items():
             if value == NO_EVENT:

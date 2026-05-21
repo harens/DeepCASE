@@ -471,7 +471,7 @@ if __name__ == "__main__":
 
     # Create preprocessor
     preprocessor = Preprocessor(
-        context = args.context,
+        length  = args.context,
         timeout = args.timeout,
     )
 
