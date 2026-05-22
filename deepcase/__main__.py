@@ -11,6 +11,7 @@ from deepcase.preprocessing   import Preprocessor
 from deepcase.context_builder import ContextBuilder
 from deepcase.interpreter     import Interpreter
 from deepcase.utils           import confusion_report, show_sequences
+from deepcase.utils           import resolve_device
 
 if __name__ == "__main__":
 
@@ -72,7 +73,7 @@ if __name__ == "__main__":
 
     # Add other arguments
     group_other = parser.add_argument_group("Other")
-    group_other.add_argument('--device', default='auto'     , help="DEVICE used for computation (cpu|cuda|auto)")
+    group_other.add_argument('--device', default='auto'     , help="DEVICE used for computation (cpu|cuda|mps|auto)")
     group_other.add_argument('--silent', action='store_true', help="silence mode, do not print progress")
 
     # Parse arguments
@@ -155,18 +156,13 @@ if __name__ == "__main__":
     ########################################################################
 
     # Automatically set device argument
-    if args.device == "auto":
-        args.device = "cuda" if torch.cuda.is_available() else "cpu"
+    args.device = resolve_device(args.device)
 
     # Automatically set the number of events to expect
     if args.events == "auto":
         args.events = len(mapping)
     else:
         args.events = int(args.events)
-
-    # Cast tensors to device
-    events  = events .to(args.device)
-    context = context.to(args.device)
 
     ########################################################################
     #                          B. Context Builder                          #

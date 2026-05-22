@@ -50,15 +50,18 @@ Note that we assign the labels as a numpy array, which requires importing numpy 
         labels = np.full(events.shape[0], -1, dtype=int)
 
 By default, the Tensors returned by the :ref:`Preprocessor` are set to the ``cpu`` device.
-If you have a system that supports ``cuda`` Tensors you can cast the Tensors to cuda using the following code.
+If you have a system that supports ``cuda`` or ``mps`` Tensors you can cast the Tensors using the following code.
 Note that the check in this code requires you to import PyTorch using ``import torch``.
 
 .. code:: python
 
-    # Cast to cuda if available
+    # Cast to an accelerator if available
     if torch.cuda.is_available():
         events  = events .to('cuda')
         context = context.to('cuda')
+    elif getattr(torch.backends, 'mps', None) is not None and torch.backends.mps.is_available():
+        events  = events .to('mps')
+        context = context.to('mps')
 
 Splitting data
 --------------
@@ -91,9 +94,11 @@ First we create an instance of DeepCASE's :ref:`ContextBuilder` using the follow
         max_length    = 10,    # Length of the context, should be same as context in Preprocessor
     )
 
-    # Cast to cuda if available
+    # Cast to an accelerator if available
     if torch.cuda.is_available():
         context_builder = context_builder.to('cuda')
+    elif getattr(torch.backends, 'mps', None) is not None and torch.backends.mps.is_available():
+        context_builder = context_builder.to('mps')
 
 Once the ``context_builder`` is created, we train it using the :py:meth:`fit()` method.
 

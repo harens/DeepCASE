@@ -57,7 +57,7 @@ The full command line usage is given in its help page:
      --batch BATCH                              batch size       to train with              (default =   128)
 
    Other:
-     --device DEVICE                            DEVICE used for computation (cpu|cuda|auto) (default =  auto)
+     --device DEVICE                            DEVICE used for computation (cpu|cuda|mps|auto) (default =  auto)
      --silent                                   silence mode, do not print progress
 
 Examples

@@ -5,6 +5,47 @@ from itertools       import cycle
 from sklearn.metrics import confusion_matrix as cm
 
 
+def resolve_device(device="auto"):
+    """Resolve a device string to a torch.device.
+
+    Parameters
+    ----------
+    device : str or torch.device, default="auto"
+        Device specification. When "auto", prefer CUDA, then MPS, then CPU.
+
+    Returns
+    -------
+    torch.device
+        Resolved device.
+    """
+    if isinstance(device, torch.device):
+        return device
+
+    if device is None:
+        device = "auto"
+
+    if device == "auto":
+        if torch.cuda.is_available():
+            return torch.device("cuda")
+
+        mps_backend = getattr(torch.backends, "mps", None)
+        if mps_backend is not None and mps_backend.is_available():
+            return torch.device("mps")
+
+        return torch.device("cpu")
+
+    resolved = torch.device(device)
+    if resolved.type == "cuda" and not torch.cuda.is_available():
+        raise ValueError("CUDA was requested but is not available.")
+
+    if resolved.type == "mps":
+        mps_backend = getattr(torch.backends, "mps", None)
+        if mps_backend is None or not mps_backend.is_available():
+            raise ValueError("MPS was requested but is not available.")
+
+    return resolved
+
+
 def confusion_report(
         y_true,
         y_pred,

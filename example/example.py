@@ -6,6 +6,7 @@ import torch
 from deepcase.preprocessing   import Preprocessor
 from deepcase.context_builder import ContextBuilder
 from deepcase.interpreter     import Interpreter
+from deepcase.utils           import resolve_device
 
 if __name__ == "__main__":
     ########################################################################
@@ -28,10 +29,7 @@ if __name__ == "__main__":
     if labels is None:
         labels = np.full(events.shape[0], -1, dtype=int)
 
-    # Cast to cuda if available
-    if torch.cuda.is_available():
-        events  = events .to('cuda')
-        context = context.to('cuda')
+    device = resolve_device("auto")
 
     ########################################################################
     #                            Splitting data                            #
@@ -59,16 +57,14 @@ if __name__ == "__main__":
         max_length    = 10,    # Length of the context, should be same as context in Preprocessor
     )
 
-    # Cast to cuda if available
-    if torch.cuda.is_available():
-        context_builder = context_builder.to('cuda')
+    context_builder = context_builder.to(device)
 
     # Train the ContextBuilder
     context_builder.fit(
         X             = context_train,               # Context to train with
         y             = events_train.reshape(-1, 1), # Events to train with, note that these should be of shape=(n_events, 1)
         epochs        = 10,                          # Number of epochs to train with
-        batch_size    = 128,                         # Number of samples in each training batch, in paper this was 128
+        batch_size    = 128,                         # Number of samples in each training batch
         learning_rate = 0.01,                        # Learning rate to train with, in paper this was 0.01
         verbose       = True,                        # If True, prints progress
     )
@@ -91,7 +87,7 @@ if __name__ == "__main__":
         X          = context_train,               # Context to train with
         y          = events_train.reshape(-1, 1), # Events to train with, note that these should be of shape=(n_events, 1)
         iterations = 100,                         # Number of iterations to use for attention query, in paper this was 100
-        batch_size = 1024,                        # Batch size to use for attention query, used to limit CUDA memory usage
+        batch_size = 1024,
         verbose    = True,                        # If True, prints progress
     )
 
@@ -125,6 +121,6 @@ if __name__ == "__main__":
         X          = context_test,               # Context to predict
         y          = events_test.reshape(-1, 1), # Events to predict, note that these should be of shape=(n_events, 1)
         iterations = 100,                        # Number of iterations to use for attention query, in paper this was 100
-        batch_size = 1024,                       # Batch size to use for attention query, used to limit CUDA memory usage
+        batch_size = 1024,
         verbose    = True,                       # If True, prints progress
     )

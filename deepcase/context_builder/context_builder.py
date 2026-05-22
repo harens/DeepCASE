@@ -593,6 +593,12 @@ class ContextBuilder(nn.Module):
                     ].exp() >= return_optimization
                 ).detach().clone())
 
+            device = next(self.parameters()).device
+            confidence = confidence.to(device)
+            attention  = attention .to(device)
+            X_ = X_.to(device)
+            y_ = y_.to(device)
+
             # Make attention variable
             attn = Variable(attention.detach().clone(), requires_grad=True)
             # Set optimizer
