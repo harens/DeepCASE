@@ -101,4 +101,5 @@ if __name__ == "__main__":
         y_true = y_test,
         y_pred = y_pred,
         digits = 4,
+        zero_division = 0,
     ))
