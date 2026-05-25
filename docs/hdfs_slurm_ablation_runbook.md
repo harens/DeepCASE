@@ -75,6 +75,9 @@ git switch main
 
 The experimental branches are then available to the worktree setup script.
 
+If the repository is a fresh clone and only the remote-tracking refs exist, that is fine.
+The setup script will create local tracking branches from `origin/<branch>` when needed.
+
 ## Configure the worktrees
 
 Pick a shared ablation root on the cluster, preferably on fast shared storage rather than in `$HOME`.

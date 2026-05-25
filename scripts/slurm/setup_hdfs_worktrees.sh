@@ -27,9 +27,16 @@ for entry in "${branches[@]}"; do
   variant="${entry%% *}"
   branch="${entry#* }"
   worktree="$WORKTREES_ROOT/$variant"
+  source_ref=""
 
-  if ! git -C "$REPO_ROOT" rev-parse --verify --quiet "$branch" >/dev/null; then
+  if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+    source_ref="$branch"
+  elif git -C "$REPO_ROOT" show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    source_ref="origin/$branch"
+  else
     echo "Missing branch: $branch" >&2
+    echo "Expected a local branch or origin/$branch after 'git fetch origin --prune'." >&2
+    echo "Push the branch from the maintainer clone, then rerun this setup script." >&2
     exit 1
   fi
 
@@ -40,9 +47,13 @@ for entry in "${branches[@]}"; do
     fi
 
     git -C "$worktree" checkout -f "$branch"
-    git -C "$worktree" reset --hard "$branch"
+    git -C "$worktree" reset --hard "$source_ref"
   else
-    git worktree add "$worktree" "$branch"
+    if git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$branch"; then
+      git worktree add "$worktree" "$branch"
+    else
+      git worktree add -b "$branch" "$worktree" "$source_ref"
+    fi
   fi
 done
 
