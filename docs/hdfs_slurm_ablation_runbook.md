@@ -85,9 +85,16 @@ Pick a shared ablation root on the cluster, preferably on fast shared storage ra
 Example:
 
 ```bash
-export DEEPCASE_ABLA_ROOT=/scratch/$USER/deepcase_hdfs_ablation
 ./scripts/slurm/setup_hdfs_worktrees.sh
 ```
+
+If `DEEPCASE_ABLA_ROOT` is unset, the setup script defaults to:
+
+```bash
+$PWD/deepcase_hdfs_ablation
+```
+
+You can still override it explicitly if you want a different location.
 
 The setup script:
 
@@ -111,7 +118,7 @@ The Slurm script uses a five-element array:
 Submit it like this:
 
 ```bash
-export DEEPCASE_ABLA_ROOT=/scratch/$USER/deepcase_hdfs_ablation
+export DEEPCASE_ABLA_ROOT="$PWD/deepcase_hdfs_ablation"
 sbatch --export=ALL,DEEPCASE_ABLA_ROOT="$DEEPCASE_ABLA_ROOT" \
   scripts/slurm/run_hdfs_ablation.slurm
 ```

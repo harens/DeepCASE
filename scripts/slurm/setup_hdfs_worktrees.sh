@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR/../.." rev-parse --show-toplevel)"
 
-: "${DEEPCASE_ABLA_ROOT:?Set DEEPCASE_ABLA_ROOT to a shared cluster path before running this script.}"
+DEEPCASE_ABLA_ROOT="${DEEPCASE_ABLA_ROOT:-$PWD/deepcase_hdfs_ablation}"
 
 WORKTREES_ROOT="$DEEPCASE_ABLA_ROOT/worktrees"
 RESULTS_ROOT="$DEEPCASE_ABLA_ROOT/results/hdfs_ablation"
