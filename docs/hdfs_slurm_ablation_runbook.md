@@ -27,6 +27,7 @@ Use one shared Python environment for all variants.
 The code paths are the same across variants and only the modelling behaviour changes, so separate environments are not required.
 
 Activate your environment before running setup or submitting jobs, and export it into Slurm if your site does not inherit the shell environment by default.
+The Slurm script will source the repository virtualenv at `env/bin/activate` via `ablation_paths.env`, so the cluster job uses the same Python environment as the repo checkout.
 
 ## Push the local branches
 
@@ -101,7 +102,7 @@ The setup script:
 - fetches the latest branch refs
 - creates or refreshes the experiment worktrees
 - creates `results/hdfs_ablation`, `logs/hdfs_ablation`, and `tmp/hdfs_ablation`
-- writes `ablation_paths.env` under the ablation root
+- writes `ablation_paths.env` under the ablation root, including the repo root used to activate `env/bin/activate`
 
 If you rerun it later, it will reset each worktree back to the current branch tip.
 
@@ -119,8 +120,8 @@ Submit it like this:
 
 ```bash
 export DEEPCASE_ABLA_ROOT="$PWD/deepcase_hdfs_ablation"
-export MAIN_REPO_ROOT="$PWD"
-sbatch --chdir="$MAIN_REPO_ROOT" \
+source "$DEEPCASE_ABLA_ROOT/ablation_paths.env"
+sbatch --chdir="$DEEPCASE_REPO_ROOT" \
   scripts/slurm/run_hdfs_ablation.slurm
 ```
 

@@ -11,6 +11,37 @@ set -euo pipefail
 
 : "${DEEPCASE_ABLA_ROOT:?Set DEEPCASE_ABLA_ROOT to the shared cluster ablation root before submitting this job.}"
 
+ABLA_ENV_FILE="$DEEPCASE_ABLA_ROOT/ablation_paths.env"
+if [[ -f "$ABLA_ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  source "$ABLA_ENV_FILE"
+fi
+
+if [[ -z "${DEEPCASE_REPO_ROOT:-}" ]]; then
+  echo "DEEPCASE_REPO_ROOT is not set." >&2
+  echo "Run scripts/slurm/setup_hdfs_worktrees.sh so ablation_paths.env is created." >&2
+  exit 1
+fi
+
+VENV_ACTIVATE="$DEEPCASE_REPO_ROOT/env/bin/activate"
+if [[ ! -f "$VENV_ACTIVATE" ]]; then
+  echo "Missing Python virtualenv activation script: $VENV_ACTIVATE" >&2
+  echo "Create or update the repo env before submitting this job." >&2
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$VENV_ACTIVATE"
+
+if ! python - <<'PY' >/dev/null 2>&1
+import torch
+PY
+then
+  echo "The active Python environment does not provide torch." >&2
+  echo "Activate the repository env or reinstall dependencies in $DEEPCASE_REPO_ROOT/env." >&2
+  exit 1
+fi
+
 VARIANTS=(
   "main"
   "padding-mask-semantics"
@@ -33,7 +64,7 @@ esac
 
 case "$variant" in
   main)
-    MAIN_REPO_ROOT="${MAIN_REPO_ROOT:-$PWD}"
+    MAIN_REPO_ROOT="${MAIN_REPO_ROOT:-${DEEPCASE_REPO_ROOT:-$PWD}}"
     if ! git -C "$MAIN_REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
       echo "MAIN_REPO_ROOT is not a git repo: $MAIN_REPO_ROOT" >&2
       echo "Submit from repo root or export MAIN_REPO_ROOT=/path/to/main/repo" >&2
