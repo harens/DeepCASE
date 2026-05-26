@@ -1,4 +1,6 @@
 # Other imports
+from pathlib import Path
+
 from sklearn.metrics import classification_report
 import numpy as np
 import torch
@@ -9,6 +11,8 @@ from deepcase.context_builder import ContextBuilder
 from deepcase.utils           import resolve_device
 
 if __name__ == "__main__":
+    example_dir = Path(__file__).resolve().parent
+
     ########################################################################
     #                             Loading data                             #
     ########################################################################
@@ -21,7 +25,7 @@ if __name__ == "__main__":
 
     # Load data from file
     context, events, labels, mapping = preprocessor.text(
-        path    = 'data/hdfs/hdfs_test_normal',
+        path    = example_dir / 'data/hdfs/hdfs_test_normal',
         verbose = True,
     )
 
