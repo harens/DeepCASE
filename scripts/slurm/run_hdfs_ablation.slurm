@@ -97,6 +97,12 @@ if ! git -C "$worktree" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   exit 1
 fi
 
+example_dir="$worktree/example"
+if [[ ! -d "$example_dir" ]]; then
+  echo "Missing example directory for variant '$variant': $example_dir" >&2
+  exit 1
+fi
+
 commit="$(git -C "$worktree" rev-parse HEAD)"
 job_id="${SLURM_JOB_ID:-local}"
 task_id="${SLURM_ARRAY_TASK_ID:-local}"
@@ -121,6 +127,7 @@ mkdir -p "$TMPDIR" "$XDG_CACHE_HOME" "$TORCH_HOME" "$PYTHONPYCACHEPREFIX" "$MPLC
   printf 'branch=%s\n' "$branch"
   printf 'commit=%s\n' "$commit"
   printf 'worktree=%s\n' "$worktree"
+  printf 'example_dir=%s\n' "$example_dir"
   printf 'slurm_job_id=%s\n' "$job_id"
   printf 'slurm_array_task_id=%s\n' "$task_id"
   printf 'hostname=%s\n' "$(hostname -f 2>/dev/null || hostname)"
@@ -151,8 +158,8 @@ PY
   printf 'cuda_diagnostics_end\n'
 } > "$RUN_DIR/metadata.txt"
 
-cd "$worktree"
+cd "$example_dir"
 
 echo "Running variant=$variant branch=$branch commit=$commit"
 echo "Results directory: $RUN_DIR"
-python example/example_hdfs.py 2>&1 | tee "$RUN_DIR/example.log"
+python example_hdfs.py 2>&1 | tee "$RUN_DIR/example.log"
