@@ -11,9 +11,6 @@ set -euo pipefail
 
 : "${DEEPCASE_ABLA_ROOT:?Set DEEPCASE_ABLA_ROOT to the shared cluster ablation root before submitting this job.}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MAIN_REPO_ROOT="$(git -C "$SCRIPT_DIR/../.." rev-parse --show-toplevel)"
-
 VARIANTS=(
   "main"
   "padding-mask-semantics"
@@ -36,8 +33,14 @@ esac
 
 case "$variant" in
   main)
+    MAIN_REPO_ROOT="${MAIN_REPO_ROOT:-$PWD}"
+    if ! git -C "$MAIN_REPO_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "MAIN_REPO_ROOT is not a git repo: $MAIN_REPO_ROOT" >&2
+      echo "Submit from repo root or export MAIN_REPO_ROOT=/path/to/main/repo" >&2
+      exit 1
+    fi
+    worktree="$(git -C "$MAIN_REPO_ROOT" rev-parse --show-toplevel)"
     branch="main"
-    worktree="$MAIN_REPO_ROOT"
     ;;
   padding-mask-semantics)
     branch="exp/hdfs-padding-mask-semantics"

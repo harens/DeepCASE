@@ -119,7 +119,8 @@ Submit it like this:
 
 ```bash
 export DEEPCASE_ABLA_ROOT="$PWD/deepcase_hdfs_ablation"
-sbatch --export=ALL,DEEPCASE_ABLA_ROOT="$DEEPCASE_ABLA_ROOT" \
+export MAIN_REPO_ROOT="$PWD"
+sbatch --chdir="$MAIN_REPO_ROOT" \
   scripts/slurm/run_hdfs_ablation.slurm
 ```
 
